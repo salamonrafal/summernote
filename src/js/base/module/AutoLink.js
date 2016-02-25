@@ -9,6 +9,7 @@ define([
     var self = this;
     var defaultScheme = 'http://';
     var linkPattern = /^(https?:\/\/|ssh:\/\/|ftp:\/\/|file:\/|mailto:[A-Z0-9._%+-]+@)?(www\.)?(.+)$/i;
+    var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
     this.events = {
       'summernote.keyup': function (we, e) {
@@ -47,6 +48,23 @@ define([
       }
 
     };
+    
+    this.replaceEmail = function () {
+      if (!this.lastWordRange) {
+        return;
+      }
+      var keyword = this.lastWordRange.toString();
+      var match = keyword.match(emailPattern);
+      if (match) {
+        var link = 'mailto:' + keyword;
+        var node = $('<a />').html(keyword).attr('href', link)[0];
+
+        this.lastWordRange.insertNode(node);
+        this.lastWordRange = null;
+        context.invoke('editor.focus');
+      }
+      
+    };
 
     this.handleKeydown = function (e) {
       if (list.contains([key.code.ENTER, key.code.SPACE], e.keyCode)) {
@@ -58,6 +76,7 @@ define([
     this.handleKeyup = function (e) {
       if (list.contains([key.code.ENTER, key.code.SPACE], e.keyCode)) {
         this.replace();
+        this.replaceEmail();
       }
     };
   };

@@ -3,10 +3,10 @@
  * http://summernote.org/
  *
  * summernote.js
- * Copyright 2013-2015 Alan Hong. and other contributors
+ * Copyright 2013-2016 Alan Hong. and other contributors
  * summernote may be freely distributed under the MIT license./
  *
- * Date: 2016-02-15T18:35Z
+ * Date: 2016-02-25T01:06Z
  */
 (function (factory) {
   /* global define */
@@ -3779,14 +3779,19 @@
         context.triggerEvent('focusout', event);
       });
 
-      if (!options.airMode && options.height) {
-        this.setHeight(options.height);
-      }
-      if (!options.airMode && options.maxHeight) {
-        $editable.css('max-height', options.maxHeight);
-      }
-      if (!options.airMode && options.minHeight) {
-        $editable.css('min-height', options.minHeight);
+      if (!options.airMode) {
+        if (options.width) {
+          $editor.outerWidth(options.width);
+        }
+        if (options.height) {
+          $editable.outerHeight(options.height);
+        }
+        if (options.maxHeight) {
+          $editable.css('max-height', options.maxHeight);
+        }
+        if (options.minHeight) {
+          $editable.css('min-height', options.minHeight);
+        }
       }
 
       history.recordUndo();
@@ -4430,18 +4435,12 @@
     this.empty = function () {
       context.invoke('code', dom.emptyPara);
     };
-
-    /**
-     * set height for editable
-     */
-    this.setHeight = function (height) {
-      $editable.outerHeight(height);
-    };
   };
 
   var Clipboard = function (context) {
     var self = this;
-
+    var options = context.options;
+    var callbacks = options.callbacks;
     var $editable = context.layoutInfo.editable;
 
     this.events = {
@@ -4474,7 +4473,6 @@
           opacity: 0
         });
         $editable.before(this.$paste);
-
         this.$paste.on('paste', function (event) {
           context.triggerEvent('paste', event);
         });
@@ -4492,7 +4490,6 @@
 
     this.pasteByHook = function () {
       var node = this.$paste[0].firstChild;
-
       if (dom.isImg(node)) {
         var dataURI = node.src;
         var decodedData = atob(dataURI.split(',')[1]);
@@ -4511,6 +4508,10 @@
         var pasteContent = $('<div />').html(this.$paste.html()).html();
         context.invoke('editor.restoreRange');
         context.invoke('editor.focus');
+        
+        if (callbacks.afterpaste) {
+          pasteContent = callbacks.afterpaste.apply(this, [pasteContent]);
+        }
 
         if (pasteContent) {
           context.invoke('editor.pasteHTML', pasteContent);
@@ -4531,6 +4532,28 @@
         var item = list.head(clipboardData.items);
         if (item.kind === 'file' && item.type.indexOf('image/') !== -1) {
           context.invoke('editor.insertImagesOrCallback', [item.getAsFile()]);
+        } else {
+          var pasteContent = '';
+            
+          if (/text\/html/.test(clipboardData.types)) {
+            pasteContent = clipboardData.getData('text/html');
+          } else if (/text\/plain/.test(clipboardData.types)) {
+            pasteContent = clipboardData.getData('text/plain');
+          }
+            
+          context.invoke('editor.restoreRange');
+          context.invoke('editor.focus');
+          
+          if (callbacks.afterpaste) {
+            pasteContent = callbacks.afterpaste.apply(this, [pasteContent]);
+          }
+
+          if (pasteContent) {
+            context.invoke('editor.pasteHTML', pasteContent);
+          }
+          
+          event.stopPropagation();
+          event.preventDefault();
         }
         context.invoke('editor.afterCommand');
       }
@@ -4939,6 +4962,7 @@
     var self = this;
     var defaultScheme = 'http://';
     var linkPattern = /^(https?:\/\/|ssh:\/\/|ftp:\/\/|file:\/|mailto:[A-Z0-9._%+-]+@)?(www\.)?(.+)$/i;
+    var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
     this.events = {
       'summernote.keyup': function (we, e) {
@@ -4977,6 +5001,23 @@
       }
 
     };
+    
+    this.replaceEmail = function () {
+      if (!this.lastWordRange) {
+        return;
+      }
+      var keyword = this.lastWordRange.toString();
+      var match = keyword.match(emailPattern);
+      if (match) {
+        var link = 'mailto:' + keyword;
+        var node = $('<a />').html(keyword).attr('href', link)[0];
+
+        this.lastWordRange.insertNode(node);
+        this.lastWordRange = null;
+        context.invoke('editor.focus');
+      }
+      
+    };
 
     this.handleKeydown = function (e) {
       if (list.contains([key.code.ENTER, key.code.SPACE], e.keyCode)) {
@@ -4988,6 +5029,7 @@
     this.handleKeyup = function (e) {
       if (list.contains([key.code.ENTER, key.code.SPACE], e.keyCode)) {
         this.replace();
+        this.replaceEmail();
       }
     };
   };

@@ -6,7 +6,8 @@ define([
 ], function (list, dom, key, agent) {
   var Clipboard = function (context) {
     var self = this;
-
+    var options = context.options;
+    var callbacks = options.callbacks;
     var $editable = context.layoutInfo.editable;
 
     this.events = {
@@ -39,7 +40,6 @@ define([
           opacity: 0
         });
         $editable.before(this.$paste);
-
         this.$paste.on('paste', function (event) {
           context.triggerEvent('paste', event);
         });
@@ -57,7 +57,6 @@ define([
 
     this.pasteByHook = function () {
       var node = this.$paste[0].firstChild;
-
       if (dom.isImg(node)) {
         var dataURI = node.src;
         var decodedData = atob(dataURI.split(',')[1]);
@@ -76,6 +75,10 @@ define([
         var pasteContent = $('<div />').html(this.$paste.html()).html();
         context.invoke('editor.restoreRange');
         context.invoke('editor.focus');
+        
+        if (callbacks.afterpaste) {
+          pasteContent = callbacks.afterpaste.apply(this, [pasteContent]);
+        }
 
         if (pasteContent) {
           context.invoke('editor.pasteHTML', pasteContent);
@@ -96,6 +99,28 @@ define([
         var item = list.head(clipboardData.items);
         if (item.kind === 'file' && item.type.indexOf('image/') !== -1) {
           context.invoke('editor.insertImagesOrCallback', [item.getAsFile()]);
+        } else {
+          var pasteContent = '';
+            
+          if (/text\/html/.test(clipboardData.types)) {
+            pasteContent = clipboardData.getData('text/html');
+          } else if (/text\/plain/.test(clipboardData.types)) {
+            pasteContent = clipboardData.getData('text/plain');
+          }
+            
+          context.invoke('editor.restoreRange');
+          context.invoke('editor.focus');
+          
+          if (callbacks.afterpaste) {
+            pasteContent = callbacks.afterpaste.apply(this, [pasteContent]);
+          }
+
+          if (pasteContent) {
+            context.invoke('editor.pasteHTML', pasteContent);
+          }
+          
+          event.stopPropagation();
+          event.preventDefault();
         }
         context.invoke('editor.afterCommand');
       }
